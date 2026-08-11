@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zero-shot-insect-detection"
+version = "0.1.0"
+description = "Zero-shot insect detection using vision-language foundation models"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "transformers",
+    "Pillow",
+    "pycocotools",
+    "numpy",
+    "tqdm",
+    "matplotlib",
+    "seaborn",
+    "scikit-learn==1.8.0",
+    "joblib",
+    "opencv-python",
+    "huggingface_hub",
+    "ultralytics",
+    "open_clip_torch",
+    "pandas",
+    "ipykernel",
+    "python-dotenv",
+    "pytest",
+    "gdown>=6.1.0",
+    "jupyterlab>=4.6.2",
+]
+
+[project.urls]
+Repository = "https://github.com/lollogiro/zero-shot-insect-detection"
+
+[tool.setuptools.packages.find]
+include = ["utils*", "binary_classificator*"]

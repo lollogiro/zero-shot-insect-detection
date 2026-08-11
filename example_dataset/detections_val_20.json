@@ -1,0 +1,340 @@
+{
+  "info": {
+    "description": "Example dataset derived from rangex/detections_val_20_scene.json (one image per class + one empty image)",
+    "version": "1.0",
+    "year": 2026
+  },
+  "licenses": [],
+  "categories": [
+    {
+      "id": 2,
+      "name": "bumblebee+",
+      "supercategory": "insect"
+    },
+    {
+      "id": 3,
+      "name": "bee",
+      "supercategory": "insect"
+    },
+    {
+      "id": 4,
+      "name": "ant",
+      "supercategory": "insect"
+    },
+    {
+      "id": 5,
+      "name": "hymenoptera",
+      "supercategory": "insect"
+    },
+    {
+      "id": 6,
+      "name": "syrphid-",
+      "supercategory": "insect"
+    },
+    {
+      "id": 7,
+      "name": "diptera",
+      "supercategory": "insect"
+    },
+    {
+      "id": 8,
+      "name": "lepidoptera",
+      "supercategory": "insect"
+    },
+    {
+      "id": 9,
+      "name": "coleoptera",
+      "supercategory": "insect"
+    }
+  ],
+  "images": [
+    {
+      "id": 8,
+      "file_name": "C01_01_0_2902_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 48,
+      "file_name": "C01_01_2_163_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 291,
+      "file_name": "C10_01_20_8114_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 664,
+      "file_name": "C18_01_43_1351_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 52,
+      "file_name": "C01_01_2_199_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 78,
+      "file_name": "C01_02_4_1056_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 22,
+      "file_name": "C01_01_0_5671_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 64,
+      "file_name": "C01_01_2_4438_2.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "id": 3,
+      "file_name": "C01_01_0_1606_1.jpg",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
+  "annotations": [
+    {
+      "id": 6,
+      "image_id": 8,
+      "category_id": 2,
+      "category_name": "bumblebee+",
+      "segmentation": [],
+      "area": 31040,
+      "bbox": [
+        376,
+        336,
+        160,
+        194
+      ],
+      "iscrowd": 0,
+      "detectionID": "C01_01_0_2902_517540_14",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 213.0,
+      "deploymentID": "2023_CH_C01_01",
+      "sceneID": "C01_01_0",
+      "mediaID": "C01_01_0_2902",
+      "eventID": "517540_14",
+      "DOY": 173,
+      "Hour": 12,
+      "Minute": 35,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    },
+    {
+      "id": 12,
+      "image_id": 22,
+      "category_id": 8,
+      "category_name": "lepidoptera",
+      "segmentation": [],
+      "area": 130944,
+      "bbox": [
+        258,
+        93,
+        341,
+        384
+      ],
+      "iscrowd": 0,
+      "detectionID": "C01_01_0_5671_517540_48",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 213.0,
+      "deploymentID": "2023_CH_C01_01",
+      "sceneID": "C01_01_0",
+      "mediaID": "C01_01_0_5671",
+      "eventID": "517540_48",
+      "DOY": 175,
+      "Hour": 10,
+      "Minute": 46,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    },
+    {
+      "id": 24,
+      "image_id": 48,
+      "category_id": 3,
+      "category_name": "bee",
+      "segmentation": [],
+      "area": 10873,
+      "bbox": [
+        494,
+        273,
+        83,
+        131
+      ],
+      "iscrowd": 0,
+      "detectionID": "C01_01_2_163_604132_202",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 203.5,
+      "deploymentID": "2023_CH_C01_01",
+      "sceneID": "C01_01_2",
+      "mediaID": "C01_01_2_163",
+      "eventID": "604132_202",
+      "DOY": 171,
+      "Hour": 14,
+      "Minute": 54,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    },
+    {
+      "id": 25,
+      "image_id": 52,
+      "category_id": 6,
+      "category_name": "syrphid-",
+      "segmentation": [],
+      "area": 4814,
+      "bbox": [
+        550,
+        273,
+        58,
+        83
+      ],
+      "iscrowd": 0,
+      "detectionID": "C01_01_2_199_604132_203",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 203.5,
+      "deploymentID": "2023_CH_C01_01",
+      "sceneID": "C01_01_2",
+      "mediaID": "C01_01_2_199",
+      "eventID": "604132_203",
+      "DOY": 171,
+      "Hour": 15,
+      "Minute": 30,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    },
+    {
+      "id": 35,
+      "image_id": 64,
+      "category_id": 9,
+      "category_name": "coleoptera",
+      "segmentation": [],
+      "area": 2772,
+      "bbox": [
+        651,
+        336,
+        66,
+        42
+      ],
+      "iscrowd": 0,
+      "detectionID": "C01_01_2_4438_604132_241",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 203.5,
+      "deploymentID": "2023_CH_C01_01",
+      "sceneID": "C01_01_2",
+      "mediaID": "C01_01_2_4438",
+      "eventID": "604132_241",
+      "DOY": 174,
+      "Hour": 14,
+      "Minute": 12,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    },
+    {
+      "id": 44,
+      "image_id": 78,
+      "category_id": 7,
+      "category_name": "diptera",
+      "segmentation": [],
+      "area": 36504,
+      "bbox": [
+        420,
+        350,
+        216,
+        169
+      ],
+      "iscrowd": 0,
+      "detectionID": "C01_02_4_1056_668654_3485",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 295.0,
+      "deploymentID": "2023_CH_C01_02",
+      "sceneID": "C01_02_4",
+      "mediaID": "C01_02_4_1056",
+      "eventID": "668654_3485",
+      "DOY": 211,
+      "Hour": 17,
+      "Minute": 36,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    },
+    {
+      "id": 154,
+      "image_id": 291,
+      "category_id": 4,
+      "category_name": "ant",
+      "segmentation": [],
+      "area": 5840,
+      "bbox": [
+        350,
+        303,
+        73,
+        80
+      ],
+      "iscrowd": 0,
+      "detectionID": "C10_01_20_8114_668602_1109",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 311.5,
+      "deploymentID": "2023_CH_C10_01",
+      "sceneID": "C10_01_20",
+      "mediaID": "C10_01_20_8114",
+      "eventID": "668602_1109",
+      "DOY": 196,
+      "Hour": 15,
+      "Minute": 18,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    },
+    {
+      "id": 368,
+      "image_id": 664,
+      "category_id": 5,
+      "category_name": "hymenoptera",
+      "segmentation": [],
+      "area": 60225,
+      "bbox": [
+        660,
+        150,
+        219,
+        275
+      ],
+      "iscrowd": 0,
+      "detectionID": "C18_01_43_1351_754839_7549",
+      "flash": 0,
+      "flower_species": "scacol",
+      "focus": "clear",
+      "scalingFactor": 313.0,
+      "deploymentID": "2023_CH_C18_01",
+      "sceneID": "C18_01_43",
+      "mediaID": "C18_01_43_1351",
+      "eventID": "754839_7549",
+      "DOY": 173,
+      "Hour": 11,
+      "Minute": 1,
+      "lifeStage": "adult",
+      "behaviour": "on_flower"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+MIT License
+
+Copyright (c) 2026 Lorenzo Girotti
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+# Third-Party Model Licenses
+
+This project evaluates the third-party models listed below. They are the
+property of their respective owners and are released under the licenses
+stated in their repositories; the MIT license above applies only to this
+project's own code. Several models are gated on HuggingFace and require
+accepting their terms before download.
+
+| Model | Used as | License | Source |
+|---|---|---|---|
+| GroundingDINO | Detector (`IDEA-Research/grounding-dino-base`, `rziga/mm_grounding_dino_large_all`) | Apache-2.0 | https://github.com/IDEA-Research/GroundingDINO |
+| SAM3 | Detector (`facebook/sam3`) | SAM License (custom, Meta) | https://huggingface.co/facebook/sam3 |
+| OWL-ViT | Detector (`google/owlvit-large-patch14`) | Apache-2.0 | https://huggingface.co/google/owlvit-large-patch14 |
+| YOLOv5 | Detector engine via `torch.hub` (`ultralytics/yolov5`) | AGPL-3.0 | https://github.com/ultralytics/yolov5 |
+| Ultralytics (YOLOv8 engine) | Detector engine for FlatBug / InsectsDCT weights | AGPL-3.0 | https://github.com/ultralytics/ultralytics |
+| DINOv2 | Embedding extractor (`facebookresearch/dinov2`) | Apache-2.0 | https://github.com/facebookresearch/dinov2 |
+| DINOv3 | Embedding extractor (`facebook/dinov3-vith16plus-pretrain-lvd1689m`) | DINOv3 License (custom, Meta) | https://huggingface.co/facebook/dinov3-vith16plus-pretrain-lvd1689m |
+| BioCLIP-2 | Embedding extractor (`imageomics/bioclip-2`) | MIT | https://huggingface.co/imageomics/bioclip-2 |
+| BioCLIP-2.5 | Embedding extractor (`imageomics/bioclip-2.5-vith14`) | MIT | https://huggingface.co/imageomics/bioclip-2.5-vith14 |
+| EUPE (ViT-B/16) | Optional embedding extractor (local checkpoint) | See the EUPE repository's own license | Local checkout (`EUPE_REPO_DIR`) |
+
+Notes:
+
+- The fine-tuned YOLO weights used as supervised baselines (Bjerge2023,
+  Stark2023, Marin2025, FlatBug, InsectsDCT) are derived from YOLOv5/YOLOv8
+  and distributed by their authors; their download sources are listed in
+  `MODEL_WEIGHTS.md`. As derivatives of AGPL-3.0 code, redistribution of
+  those weights or of services built on them may be subject to AGPL-3.0
+  terms.
+- Meta's SAM and DINOv3 licenses are custom, non-standard agreements
+  (research and commercial use permitted, redistribution under the same
+  license, attribution in publications, no reverse engineering, compliance
+  with export controls and sanctions). They are not compatible with
+  re-licensing under MIT.
+- The `example_dataset/` images are camera-trap samples used for
+  demonstration; their terms are not covered by this file.
+
+- The `example_dataset/` images are camera-trap samples used for
+  demonstration only. They are not covered by the MIT license above and
+  are released under CC BY-NC-SA 4.0 (Attribution-NonCommercial-
+  ShareAlike): non-commercial use only, with attribution and
+  share-alike obligations.
