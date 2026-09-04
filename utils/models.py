@@ -575,3 +575,7 @@ class FlatBugDetector(YOLODetector):
 class InsectsDCTDetector(YOLODetector):
     def __init__(self, model_name: str = "./models-cache/insectsDCT_insects6ColorExtend.pt", device: Optional[str] = None, slice_size: Optional[int] = None, overlap: float = 0.0):
         super().__init__(model_name=model_name, device=device, slice_size=slice_size, overlap=overlap, use_ultralytics=True)
+
+class ArthropodDetector(YOLODetector):
+    def __init__(self, model_name: str = "./models-cache/yolo11l_ArthroNat+flatbug.pt", device: Optional[str] = None, slice_size: Optional[int] = None, overlap: float = 0.0):
+        super().__init__(model_name=model_name, device=device, slice_size=slice_size, overlap=overlap, use_ultralytics=True)

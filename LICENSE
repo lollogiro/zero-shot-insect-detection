@@ -46,7 +46,7 @@ accepting their terms before download.
 Notes:
 
 - The fine-tuned YOLO weights used as supervised baselines (Bjerge2023,
-  Stark2023, Marin2025, FlatBug, InsectsDCT) are derived from YOLOv5/YOLOv8
+  Stark2023, Marin2025, FlatBug, InsectsDCT, ArthroNat) are derived from YOLOv5/YOLOv8
   and distributed by their authors; their download sources are listed in
   `MODEL_WEIGHTS.md`. As derivatives of AGPL-3.0 code, redistribution of
   those weights or of services built on them may be subject to AGPL-3.0

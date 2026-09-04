@@ -80,6 +80,21 @@ if [ "$DOWNLOAD_YOLO" -eq 1 ]; then
         wget -O models-cache/insectsDCT_insects6ColorExtend.pt \
           https://raw.githubusercontent.com/kimbjerge/insectDCT/main/runs/detect/insects6ColorExtend/weights/best.pt
     fi
+
+    # ArthropodDetector (edgaremy/arthropod-detector on the HF Hub). Two
+    # training-data variants of the same YOLO11-large checkpoint: the default
+    # "+flatbug" one, and the "mosaic33" alternative.
+    if skip models-cache/yolo11l_ArthroNat+flatbug.pt; then :; else
+        echo "Downloading Arthropod (ArthroNat+flatbug) ..."
+        wget -O models-cache/yolo11l_ArthroNat+flatbug.pt \
+          https://huggingface.co/edgaremy/arthropod-detector/resolve/main/yolo11l_ArthroNat+flatbug.pt
+    fi
+
+    if skip models-cache/yolo11l_ArthroNat_mosaic33.pt; then :; else
+        echo "Downloading Arthropod (ArthroNat_mosaic33) ..."
+        wget -O models-cache/yolo11l_ArthroNat_mosaic33.pt \
+          https://huggingface.co/edgaremy/arthropod-detector/resolve/main/yolo11l_ArthroNat_mosaic33.pt
+    fi
 fi
 
 if [ "$DOWNLOAD_BINARY" -eq 1 ]; then

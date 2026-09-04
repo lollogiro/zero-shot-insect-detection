@@ -823,12 +823,19 @@ def visualize_json_results(coco_gt, preds, images_dir, conf_threshold=None, imag
             best_iou = max([calculate_iou(p['bbox'], gt_ann['bbox']) for gt_ann in gt_anns], default=0.0)
             individual_insects.append((cropped_insect, p.get('score', 1.0), best_iou))
 
+    n_drawn = 0
+    for _p in img_preds:
+        _score = _p.get("score", 1.0)
+        if conf_threshold is not None and _score < conf_threshold:
+            continue
+        n_drawn += 1
+
     num_insects = len(individual_insects)
     
     if num_insects == 0:
         plt.figure(figsize=(15, 10))
         plt.imshow(image_with_boxes)
-        plt.title(f"Image: {image_id} | GT (Blue): {len(gt_anns)} | Preds (Red): {num_insects} (Total: {len(img_preds)})", fontsize=16)
+        plt.title(f"Image: {image_id} | GT (Blue): {len(gt_anns)} | Preds (Red): {n_drawn} (Total: {len(img_preds)})", fontsize=16)
         plt.axis('off')
     else:
         fig = plt.figure(figsize=(15, 10))
@@ -836,7 +843,7 @@ def visualize_json_results(coco_gt, preds, images_dir, conf_threshold=None, imag
 
         ax_main = fig.add_subplot(gs[0, :])
         ax_main.imshow(image_with_boxes)
-        ax_main.set_title(f"Image: {image_id} | GT (Blue): {len(gt_anns)} | Preds (Red): {num_insects} (Total: {len(img_preds)})", fontsize=16)
+        ax_main.set_title(f"Image: {image_id} | GT (Blue): {len(gt_anns)} | Preds (Red): {n_drawn} (Total: {len(img_preds)})", fontsize=16)
         ax_main.axis('off')
 
         for i, (insect, score, iou) in enumerate(individual_insects):

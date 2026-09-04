@@ -32,6 +32,8 @@ used in `utils/models.py`. Several downloads ship under a different name
 | Marin2025 | `marin2025.pt` | Google Drive folder |
 | FlatBug | `flat_bug_M.pt` | Direct (erda) |
 | InsectsDCT | `insectsDCT_insects6ColorExtend.pt` | Direct (GitHub raw) |
+| Arthropod (default) | `yolo11l_ArthroNat+flatbug.pt` | HF Hub (edgaremy/arthropod-detector) |
+| Arthropod (variant) | `yolo11l_ArthroNat_mosaic33.pt` | HF Hub (edgaremy/arthropod-detector) |
 
 ### Stark2023 (YOLOv5-s)
 
@@ -79,6 +81,24 @@ wget -O models-cache/flat_bug_M.pt \
 ```bash
 wget -O models-cache/insectsDCT_insects6ColorExtend.pt \
   https://raw.githubusercontent.com/kimbjerge/insectDCT/main/runs/detect/insects6ColorExtend/weights/best.pt
+```
+
+### Arthropod (HF Hub)
+
+Two training-data variants of the same single-class YOLO11-large checkpoint.
+The default `yolo11l_ArthroNat+flatbug.pt` generalises best out-of-domain and
+on small objects; `yolo11l_ArthroNat_mosaic33.pt` is the alternative. Note
+the model card still documents older file names (`yolo11l_arthropod_0.413.pt`
+etc.) that 404 on the Hub; the two files below are the ones actually
+published. `utils/models.py` (ArthropodDetector) defaults to the `+flatbug`
+one, and `examples/arthropod_detector.py` lets you pick either via
+`ARTHROPOD_VARIANT`.
+
+```bash
+wget -O models-cache/yolo11l_ArthroNat+flatbug.pt \
+  https://huggingface.co/edgaremy/arthropod-detector/resolve/main/yolo11l_ArthroNat+flatbug.pt
+wget -O models-cache/yolo11l_ArthroNat_mosaic33.pt \
+  https://huggingface.co/edgaremy/arthropod-detector/resolve/main/yolo11l_ArthroNat_mosaic33.pt
 ```
 
 ## Binary classifier weights
