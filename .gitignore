@@ -230,3 +230,5 @@ binary_classificator/*.pth
 binary_classificator/*.joblib
 
 EUPE/
+
+CLAUDE.md

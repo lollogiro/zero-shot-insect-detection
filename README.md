@@ -455,7 +455,27 @@ committed SAM3 example run (`results/sam3/example_dataset.json`), which
 ## Citation & License
 
 MIT License. If you use this work in academic research, please cite the
-thesis (link to be added after publication). The licenses of the third-party
+thesis. 
+
+```bibliography
+@phdthesis{amslaurea40122,
+        title = {Leveraging Foundation Models to Improve Insect Localization in Field Images},
+        keywords = {computer vision, object detection, foundation models, insects, entomology, automatic monitoring},
+        author = {Girotti, Lorenzo},
+        abstract = {The automatic detection of insects in natural environments is a critical challenge for ecological monitoring. 
+        While detection on homogeneous backgrounds is largely solved, localizing insects in "wild" settings with complex textures 
+        remains an open task. To address this limitation, this thesis proposes a novel zero-shot detection pipeline leveraging 
+        Grounding DINO and Segment Anything Model 3 (SAM3).
+        After evaluating multiple prompting strategies, a lightweight supervised binary discriminator is introduced as a post-
+        processing step to re-score predictions based on the presence of insects. Benchmarked across diverse full-frame and 
+        close-up datasets, the proposed pipeline demonstrates exceptional out-of-distribution capabilities, consistently 
+        outperforming state of-the-art supervised models in single flower monitoring scenarios. Finally, the limitations of this 
+        approach are discussed, particularly regarding the computational cost of foundation models inference.},
+        url = {https://amslaurea.unibo.it/id/eprint/40122/}
+}
+```
+
+The licenses of the third-party
 models used by this project (GroundingDINO, SAM3, OWL-ViT, YOLO, DINOv2/v3,
 BioCLIP-2/2.5, EUPE) are listed in [LICENSE](LICENSE).
 
