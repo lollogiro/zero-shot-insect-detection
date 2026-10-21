@@ -770,7 +770,7 @@ def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
     return df
 
 
-def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1, conf_threshold=None, images_to_remove: list = None):
+def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1, conf_threshold=None, images_to_remove: list = None, correlation=False):
     """
     Plot the relative bounding-box area per class next to class-aware recall.
 
@@ -784,6 +784,13 @@ def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
     the same order, so the two panels can be read row by row. The area axis is
     logarithmic because relative areas span more than two orders of magnitude.
 
+    If correlation=True, a third panel shows the class-level relationship
+    between median relative area and recall at conf_threshold, with a Spearman
+    rank correlation and its p-value. Recall is computed from the unrounded
+    TPs/GTs ratio, so tied rounded recalls do not distort the ranks. A
+    significant p-value indicates a monotonic association between class size
+    and recall; it does not by itself prove that size is the causal driver.
+
     Args:
         coco_gt (COCO): COCO dataset object containing ground truth annotations and category information.
         preds (str, dict, or list): Predictions data, in any form accepted by
@@ -793,12 +800,18 @@ def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
             Defaults to 0.1.
         conf_threshold (float, optional): Confidence score threshold for filtering predictions.
             Predictions with score below this threshold are excluded. Defaults to None (no filtering).
+            This is the operating point used for the correlation if enabled.
         images_to_remove (list, optional): List of (key, value) tuples to filter out images
             from the plot. Images with annotations matching the criteria are excluded.
             Defaults to None (no filtering).
+        correlation (bool, optional): If True, add a scatter panel with the
+            Spearman rank correlation between per-class median relative area
+            and recall, and print rho and the p-value. Defaults to False.
     Returns:
         pd.DataFrame: Per-class statistics with columns Class, GTs, TPs, Recall
             and MedianArea (percentage of the image), sorted by median area.
+            When correlation=True, the DataFrame attrs also contain
+            'spearman_rho' and 'spearman_p'.
     """
     df = class_aware_recall_report(
         coco_gt, preds, tested_img_ids, iou_threshold=iou_threshold,
@@ -842,10 +855,15 @@ def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
     if any(len(vals) == 0 for vals in box_data):
         raise ValueError("No ground-truth boxes found for some classes; check tested_img_ids and images_to_remove.")
 
-    fig, (ax_area, ax_recall) = plt.subplots(
-        1, 2, figsize=(13, max(4, 0.55 * len(order) + 1.8)),
-        sharey=True, gridspec_kw={'width_ratios': [1.2, 1]},
+    height = max(4, 0.55 * len(order) + 1.8)
+    fig, axes = plt.subplots(
+        1, 3 if correlation else 2,
+        figsize=(17 if correlation else 13, height),
+        gridspec_kw={'width_ratios': [1.2, 1, 1.1] if correlation else [1.2, 1]},
     )
+    ax_area, ax_recall = axes[0], axes[1]
+    ax_recall.sharey(ax_area)
+    ax_corr = axes[2] if correlation else None
 
     ax_area.boxplot(
         box_data, orientation='horizontal', positions=range(len(order)),
@@ -883,7 +901,56 @@ def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
     ax_recall.set_xlabel('Recall (%)')
     ax_recall.set_title('Class-aware recall', fontsize=11)
 
-    for ax in (ax_area, ax_recall):
+    if correlation:
+        from scipy.stats import spearmanr
+
+        corr_df = stats.dropna(subset=['MedianArea']).copy()
+        corr_df['RecallExact'] = 100 * corr_df['TPs'] / corr_df['GTs']
+        x = corr_df['MedianArea'].to_numpy()
+        y = corr_df['RecallExact'].to_numpy()
+        rho, p_value = spearmanr(x, y)
+
+        ax_corr.scatter(x, y, s=55, color='#2a78d6', edgecolor='#fcfcfb',
+                        linewidth=1.2, zorder=3)
+        for i, row in enumerate(corr_df.itertuples()):
+            dy = 7 if i % 2 == 0 else -13
+            ax_corr.annotate(
+                row.Class, (row.MedianArea, row.RecallExact), xytext=(6, dy),
+                textcoords='offset points', fontsize=8, color='#52514e',
+            )
+
+        if len(x) >= 2 and np.ptp(x) > 0:
+            slope, intercept = np.polyfit(np.log10(x), y, 1)
+            xs = np.geomspace(x.min(), x.max(), 100)
+            ax_corr.plot(xs, slope * np.log10(xs) + intercept, color='#898781',
+                         linewidth=1.5, zorder=2, label='linear fit (log area)')
+            ax_corr.legend(frameon=False, fontsize=8, loc='lower right')
+
+        ax_corr.set_xscale('log')
+        ax_corr.set_xticks([0.1, 0.5, 1, 5, 10, 50])
+        ax_corr.set_xticklabels(['0.1', '0.5', '1', '5', '10', '50'])
+        ax_corr.minorticks_off()
+        ax_corr.set_xlabel('Median relative bbox area (% of image, log scale)')
+        ax_corr.set_ylabel('Recall (%)')
+        ax_corr.set_ylim(0, 105)
+        ax_corr.set_xlim(x.min() * 0.7, x.max() * 1.4)
+        if np.isfinite(p_value):
+            verdict = 'p < 0.05' if p_value < 0.05 else 'p >= 0.05'
+        else:
+            verdict = 'p = n/a'
+        ax_corr.set_title(
+            f"Spearman rho={rho:.2f}, p={p_value:.3f} ({verdict}), n={len(corr_df)}",
+            fontsize=10,
+        )
+        print(
+            f"Spearman correlation (median area vs recall at conf={conf_threshold}): "
+            f"rho={rho:.3f}, p={p_value:.4f}, n={len(corr_df)}"
+        )
+        stats.attrs['spearman_rho'] = rho
+        stats.attrs['spearman_p'] = p_value
+
+    style_axes = (ax_area, ax_recall, ax_corr) if correlation else (ax_area, ax_recall)
+    for ax in style_axes:
         ax.set_axisbelow(True)
         ax.grid(axis='x', color='#e1e0d9', linewidth=0.8)
         for side in ('top', 'right', 'left'):
