@@ -1179,16 +1179,18 @@ def _class_matching_curves(coco_gt, preds, tested_img_ids, iou_threshold=0.1, im
     }
 
 
+def _tp_mask(curve, conf_threshold=None):
+    """Boolean mask of TP detections surviving a confidence threshold."""
+    if conf_threshold is None:
+        return curve['is_tp']
+    return curve['is_tp'] & (curve['scores'] >= conf_threshold)
+
+
 def _tp_counts_at_threshold(ctx, class_ids, conf_threshold=None):
     """Per-class TP counts from the matching curves at a confidence threshold."""
     counts = {}
     for cid in class_ids:
-        curve = ctx['curves'][cid]
-        if conf_threshold is None:
-            mask = curve['is_tp']
-        else:
-            mask = curve['is_tp'] & (curve['scores'] >= conf_threshold)
-        counts[cid] = int(mask.sum())
+        counts[cid] = int(_tp_mask(ctx['curves'][cid], conf_threshold).sum())
     return counts
 
 
@@ -1205,8 +1207,10 @@ def _community_metrics(n_gt, tp):
 
     total_gt = float(n_gt.sum())
     total_tp = float(tp.sum())
+    s_gt = int((n_gt > 0).sum())
+    s_ai = int((tp > 0).sum())
 
-    nan_result = {
+    result = {
         'bray_curtis': np.nan,
         'shannon_gt': np.nan,
         'shannon_ai': np.nan,
@@ -1214,40 +1218,31 @@ def _community_metrics(n_gt, tp):
         'pielou_gt': np.nan,
         'pielou_ai': np.nan,
         'pielou_diff': np.nan,
-        'richness_gt': int((n_gt > 0).sum()),
-        'richness_ai': int((tp > 0).sum()),
+        'richness_gt': s_gt,
+        'richness_ai': s_ai,
         'gt_total': total_gt,
         'tp_total': total_tp,
     }
     if total_gt == 0 or total_tp == 0:
-        return nan_result
+        return result
 
     p_gt = n_gt / total_gt
     p_ai = tp / total_tp
 
-    bc = 0.5 * np.abs(p_gt - p_ai).sum()
-
-    s_gt = int((p_gt > 0).sum())
-    s_ai = int((p_ai > 0).sum())
     h_gt = -np.sum(p_gt[p_gt > 0] * np.log(p_gt[p_gt > 0]))
     h_ai = -np.sum(p_ai[p_ai > 0] * np.log(p_ai[p_ai > 0]))
-
     j_gt = float(h_gt / np.log(s_gt)) if s_gt > 1 else np.nan
     j_ai = float(h_ai / np.log(s_ai)) if s_ai > 1 else np.nan
 
-    result = {
-        'bray_curtis': float(bc),
+    result.update({
+        'bray_curtis': float(0.5 * np.abs(p_gt - p_ai).sum()),
         'shannon_gt': float(h_gt),
         'shannon_ai': float(h_ai),
         'shannon_diff': float(h_ai - h_gt),
         'pielou_gt': j_gt,
         'pielou_ai': j_ai,
         'pielou_diff': float(j_ai - j_gt) if np.isfinite(j_gt) and np.isfinite(j_ai) else np.nan,
-        'richness_gt': s_gt,
-        'richness_ai': s_ai,
-        'gt_total': total_gt,
-        'tp_total': total_tp,
-    }
+    })
     return result
 
 
@@ -1264,11 +1259,7 @@ def _community_count_matrices(ctx, class_ids, conf_threshold=None):
             n_gt[img_index[img_id], j] = len(boxes)
 
         curve = ctx['curves'][cid]
-        if conf_threshold is None:
-            mask = curve['is_tp']
-        else:
-            mask = curve['is_tp'] & (curve['scores'] >= conf_threshold)
-        for img_id in curve['image_ids'][mask]:
+        for img_id in curve['image_ids'][_tp_mask(curve, conf_threshold)]:
             tp[img_index[img_id], j] += 1
 
     return n_gt, tp
@@ -1344,8 +1335,6 @@ def community_composition_report(coco_gt, preds, tested_img_ids, iou_threshold=0
     results = []
     for cid in class_ids:
         total_gt = ctx['gt_counts'][cid]
-        if total_gt == 0:
-            continue
         total_tp = tp_counts[cid]
         results.append({
             "Class": coco_gt.cats[cid]["name"],
@@ -1505,12 +1494,11 @@ def plot_community_metrics_vs_confidence(coco_gt, preds, tested_img_ids, iou_thr
     )
 
     class_ids = sorted(ctx['gt_counts'].keys())
-    class_ids = [cid for cid in class_ids if ctx['gt_counts'][cid] > 0]
+    n_gt = np.array([ctx['gt_counts'][cid] for cid in class_ids], dtype=float)
 
     rows = []
     for thr in conf_thresholds:
         tp_counts = _tp_counts_at_threshold(ctx, class_ids, thr)
-        n_gt = np.array([ctx['gt_counts'][cid] for cid in class_ids], dtype=float)
         tp = np.array([tp_counts[cid] for cid in class_ids], dtype=float)
         metrics = _community_metrics(n_gt, tp)
         metrics['conf_threshold'] = float(thr)
@@ -1518,7 +1506,7 @@ def plot_community_metrics_vs_confidence(coco_gt, preds, tested_img_ids, iou_thr
 
     sweep_df = pd.DataFrame(rows).set_index('conf_threshold')
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, max(4, 0.45 * len(class_ids) + 2)))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     ax_div, ax_bc = axes[0], axes[1]
     x = sweep_df.index.to_numpy()
 
