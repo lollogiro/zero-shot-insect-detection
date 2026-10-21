@@ -644,7 +644,7 @@ def plot_fppi_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.5, max_f
     plt.legend(loc="lower right")
     plt.show()
 
-def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1, conf_threshold=None):
+def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1, conf_threshold=None, images_to_remove: list = None, show_plot=False):
     """
     Generate a class-aware recall report for object detection predictions.
     This function computes recall metrics for each object class by comparing
@@ -662,13 +662,30 @@ def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
             Defaults to 0.1.
         conf_threshold (float, optional): Confidence score threshold for filtering predictions.
             Predictions with score below this threshold are excluded. Defaults to None (no filtering).
+        images_to_remove (list, optional): List of (key, value) tuples to filter out images
+            from the report. Images with annotations matching the criteria are excluded.
+            Defaults to None (no filtering).
+        show_plot (bool, optional): If True, also draw a horizontal bar chart of recall
+            per class (class on the y axis, recall percentage on the x axis).
+            Defaults to False.
     Returns:
-        None: Prints a formatted table with class-aware recall statistics to stdout.
-              Table includes columns: Class, GTs (ground truth count), TPs (true positives), Recall.
+        pd.DataFrame: Per-class recall statistics, with columns Class, GTs
+              (ground truth count), TPs (true positives) and Recall. The same
+              table is also printed to stdout.
     """
     preds = _load_predictions(preds)
 
     tested_img_ids_norm = {normalize_id(i) for i in tested_img_ids}
+
+    if images_to_remove is not None:
+        for key, value in images_to_remove:
+            img_ids_to_remove = {
+                normalize_id(ann['image_id'])
+                for ann in coco_gt.dataset.get('annotations', [])
+                if ann.get(key) == value
+            }
+            tested_img_ids_norm -= img_ids_to_remove
+            print(f"Removed {len(img_ids_to_remove)} images based on the criteria {key}={value}")
 
     gt_by_img_and_class = defaultdict(lambda: defaultdict(list))
     gt_counts_by_class = defaultdict(int)
@@ -721,7 +738,175 @@ def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
     df = pd.DataFrame(results).sort_values("GTs", ascending=False)
     print(f"\nClass-Aware recall report (Conf Threshold: {f'{conf_threshold:.3f}' if conf_threshold is not None else 'None'})")
     print(df.to_string(index=False))
-    
+
+    if show_plot:
+        plot_df = df.sort_values("Recall", ascending=True)
+        pct = plot_df["Recall"].to_numpy() * 100
+
+        fig, ax = plt.subplots(figsize=(8, max(3, 0.45 * len(plot_df) + 1)))
+        ax.barh(plot_df["Class"], pct, height=0.6, color="#2a78d6", zorder=2)
+        for y, value in enumerate(pct):
+            ax.text(value + 1, y, f"{value:.0f}%", va="center", ha="left",
+                    fontsize=9, color="#52514e")
+
+        ax.set_xlim(0, 110)
+        ax.set_xlabel("Recall (%)")
+        ax.set_ylabel("Class")
+        title = f"Class-aware recall (IoU={iou_threshold}"
+        if conf_threshold is not None:
+            title += f", conf={conf_threshold:.3f}"
+        else:
+            title += ", conf=None"
+        ax.set_title(title + ")")
+        ax.set_axisbelow(True)
+        ax.grid(axis="x", color="#e1e0d9", linewidth=0.8)
+        for side in ("top", "right", "left"):
+            ax.spines[side].set_visible(False)
+        ax.spines["bottom"].set_color("#c3c2b7")
+        ax.tick_params(colors="#52514e", length=0)
+        fig.tight_layout()
+        plt.show()
+
+    return df
+
+
+def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1, conf_threshold=None, images_to_remove: list = None):
+    """
+    Plot the relative bounding-box area per class next to class-aware recall.
+
+    The relative area is the fraction of the image covered by a ground-truth
+    box, so it does not depend on the camera resolution:
+
+        relative_area = (bbox_width * bbox_height) / (image_width * image_height)
+
+    It is expressed as a percentage of the image. Classes are ordered by their
+    median relative area (smallest at the bottom), and the recall panel uses
+    the same order, so the two panels can be read row by row. The area axis is
+    logarithmic because relative areas span more than two orders of magnitude.
+
+    Args:
+        coco_gt (COCO): COCO dataset object containing ground truth annotations and category information.
+        preds (str, dict, or list): Predictions data, in any form accepted by
+            class_aware_recall_report.
+        tested_img_ids (list or set): Collection of image IDs to evaluate.
+        iou_threshold (float, optional): Intersection over Union threshold for matching predictions to ground truth.
+            Defaults to 0.1.
+        conf_threshold (float, optional): Confidence score threshold for filtering predictions.
+            Predictions with score below this threshold are excluded. Defaults to None (no filtering).
+        images_to_remove (list, optional): List of (key, value) tuples to filter out images
+            from the plot. Images with annotations matching the criteria are excluded.
+            Defaults to None (no filtering).
+    Returns:
+        pd.DataFrame: Per-class statistics with columns Class, GTs, TPs, Recall
+            and MedianArea (percentage of the image), sorted by median area.
+    """
+    df = class_aware_recall_report(
+        coco_gt, preds, tested_img_ids, iou_threshold=iou_threshold,
+        conf_threshold=conf_threshold, images_to_remove=images_to_remove,
+    )
+
+    img_ids_norm = {normalize_id(i) for i in tested_img_ids}
+    if images_to_remove is not None:
+        for key, value in images_to_remove:
+            img_ids_norm -= {
+                normalize_id(ann['image_id'])
+                for ann in coco_gt.dataset.get('annotations', [])
+                if ann.get(key) == value
+            }
+
+    images = {normalize_id(img['id']): img for img in coco_gt.dataset.get('images', [])}
+    areas_by_name = defaultdict(list)
+    for ann in coco_gt.dataset.get('annotations', []):
+        if ann.get('iscrowd', 0) != 0:
+            continue
+        img = images.get(normalize_id(ann.get('image_id')))
+        if img is None or not img.get('width') or not img.get('height'):
+            continue
+        if normalize_id(ann.get('image_id')) not in img_ids_norm:
+            continue
+        _, _, w, h = ann['bbox']
+        rel_area = 100 * w * h / (img['width'] * img['height'])
+        if rel_area > 0:
+            areas_by_name[coco_gt.cats[ann['category_id']]['name']].append(rel_area)
+
+    stats = df[['Class', 'GTs', 'TPs', 'Recall']].copy()
+    stats['MedianArea'] = stats['Class'].map(
+        lambda name: np.median(areas_by_name[name]) if areas_by_name.get(name) else np.nan
+    )
+    stats = stats.sort_values('MedianArea', ascending=True).reset_index(drop=True)
+    if stats.empty:
+        raise ValueError("No ground-truth annotations found for the selected images.")
+
+    order = stats['Class'].tolist()
+    box_data = [areas_by_name[name] for name in order]
+    if any(len(vals) == 0 for vals in box_data):
+        raise ValueError("No ground-truth boxes found for some classes; check tested_img_ids and images_to_remove.")
+
+    fig, (ax_area, ax_recall) = plt.subplots(
+        1, 2, figsize=(13, max(4, 0.55 * len(order) + 1.8)),
+        sharey=True, gridspec_kw={'width_ratios': [1.2, 1]},
+    )
+
+    ax_area.boxplot(
+        box_data, orientation='horizontal', positions=range(len(order)),
+        widths=0.6, patch_artist=True, showfliers=True,
+        boxprops={'facecolor': '#cde2fb', 'edgecolor': '#2a78d6', 'linewidth': 1},
+        medianprops={'color': '#184f95', 'linewidth': 1.5},
+        whiskerprops={'color': '#2a78d6', 'linewidth': 1},
+        capprops={'color': '#2a78d6', 'linewidth': 1},
+        flierprops={'marker': 'o', 'markersize': 3, 'markerfacecolor': '#898781',
+                    'markeredgecolor': 'none', 'alpha': 0.6},
+    )
+    for y, median_area in enumerate(stats['MedianArea']):
+        ax_area.annotate(
+            f"{median_area:.2f}%", xy=(median_area, y), xytext=(5, 0),
+            textcoords='offset points', va='center', fontsize=8,
+            fontweight='bold', color='#184f95',
+        )
+
+    ax_area.set_xscale('log')
+    ax_area.set_xticks([0.1, 0.5, 1, 5, 10, 50])
+    ax_area.set_xticklabels(['0.1', '0.5', '1', '5', '10', '50'])
+    ax_area.minorticks_off()
+    ax_area.set_xlabel('Relative bbox area (% of image, log scale)')
+    ax_area.set_yticks(range(len(order)))
+    ax_area.set_yticklabels(order)
+    ax_area.set_ylabel('Class')
+    ax_area.set_title('Relative bbox area', fontsize=11)
+
+    recall_pct = stats['Recall'].to_numpy() * 100
+    ax_recall.barh(range(len(order)), recall_pct, height=0.6, color='#2a78d6', zorder=2)
+    for y, value in enumerate(recall_pct):
+        ax_recall.text(value + 1, y, f"{value:.0f}%", va='center', ha='left',
+                       fontsize=9, color='#52514e')
+    ax_recall.set_xlim(0, 110)
+    ax_recall.set_xlabel('Recall (%)')
+    ax_recall.set_title('Class-aware recall', fontsize=11)
+
+    for ax in (ax_area, ax_recall):
+        ax.set_axisbelow(True)
+        ax.grid(axis='x', color='#e1e0d9', linewidth=0.8)
+        for side in ('top', 'right', 'left'):
+            ax.spines[side].set_visible(False)
+        ax.spines['bottom'].set_color('#c3c2b7')
+        ax.tick_params(colors='#52514e', length=0)
+
+    title = f"Class-aware recall vs object size (IoU={iou_threshold}"
+    if conf_threshold is not None:
+        title += f", conf={conf_threshold:.3f}"
+    fig.suptitle(title + ")")
+
+    smallest = stats.iloc[0]
+    fig.text(
+        0.5, 0.02,
+        f"Smallest median area: {smallest['Class']} ({smallest['MedianArea']:.2f}% of image)",
+        ha='center', fontsize=10, fontweight='bold', color='#52514e',
+    )
+    fig.tight_layout(rect=(0, 0.04, 1, 0.96))
+    plt.show()
+
+    return stats
+
 
 def visualize_json_results(coco_gt, preds, images_dir, conf_threshold=None, image_id=None, plot_masks=True):
     """
