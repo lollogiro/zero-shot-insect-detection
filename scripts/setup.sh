@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # ---------------------------------------------------------------------------
-# Python version check (3.11+ required)
+# Python version check (3.11-3.13 required)
 # ---------------------------------------------------------------------------
 if command -v python3 >/dev/null 2>&1; then
     PY=python3
@@ -19,8 +19,8 @@ else
     PY=python
 fi
 
-if ! "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 11))'; then
-    echo "Error: Python 3.11+ is required, found: $("$PY" --version 2>&1)"
+if ! "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 11) or sys.version_info >= (3, 14))'; then
+    echo "Error: Python 3.11-3.13 is required, found: $("$PY" --version 2>&1)"
     exit 1
 fi
 echo "Using $PY $("$PY" --version 2>&1)"

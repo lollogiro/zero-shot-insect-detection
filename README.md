@@ -1,6 +1,6 @@
 # Zero-Shot Insect Detection
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![Python 3.11-3.13](https://img.shields.io/badge/Python-3.11--3.13-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Master's thesis project, University of Bologna, 2026, Lorenzo Girotti**
@@ -44,7 +44,7 @@ compared against supervised YOLO baselines.
 ## Quick Start
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.11-3.13
 - CUDA-capable GPU (optional, CPU fallback available)
 - [HuggingFace token](https://huggingface.co/settings/tokens) (required for SAM3, DINOv3)
 
@@ -56,7 +56,7 @@ cd zero-shot-insect-detection
 bash scripts/setup.sh    # one-command setup: venv + dependencies + .env
 ```
 
-`scripts/setup.sh` creates a Python 3.11+ virtual environment (`.venv`), installs the
+`scripts/setup.sh` creates a Python 3.11-3.13 virtual environment (`.venv`), installs the
 pinned dependencies from `requirements.txt`, and copies `.env.example` to
 `.env` if it does not exist yet. It is safe to re-run.
 
