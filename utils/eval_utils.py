@@ -118,19 +118,13 @@ def evaluate_detections(coco_gt, preds, tested_img_ids, iou_threshold=0.1):
     tuple
         ``(evaluated_preds, total_gt)``; see docstring above.
     """
-    # Build gt_by_img and cat mapping
-    gt_by_img: Dict[int, list] = defaultdict(list)
-    cat_for_gt: dict = {}
-    for img_id in tested_img_ids:
-        for ann in coco_gt.loadAnns(coco_gt.getAnnIds(imgIds=img_id, iscrowd=False)):
-            gt_by_img[img_id].append(ann["bbox"])
-            cat_for_gt[(img_id, tuple(ann["bbox"]))] = ann["category_id"]
+    tested_img_ids, gt_by_img = _build_gt_by_img(coco_gt, tested_img_ids, normalize=False)
 
     # Build detections list (img_id, bbox, score) sorted by score descending
-    detections: list = []
-    for p in preds:
-        if p["image_id"] in tested_img_ids:
-            detections.append((p["image_id"], p["bbox"], p.get("score", 0)))
+    detections = [
+        (p["image_id"], p["bbox"], p.get("score", 0))
+        for p in preds if p["image_id"] in tested_img_ids
+    ]
     detections.sort(key=lambda x: x[2], reverse=True)
 
     tp, fp, scores = match_predictions_to_gt(detections, gt_by_img, iou_threshold)
@@ -229,15 +223,19 @@ def detection_evaluation(coco_gt, preds, iou_type='bbox', images_to_remove: list
         return np.mean(valid) if len(valid) > 0 else 0.0
 
     eval_obj.extra_metrics = {}
-    
+    ap_values = [get_ap(eval_obj, t) for t in full_thrs]
+    ar_values = [get_ar(eval_obj, t) for t in full_thrs]
+
     for t in [0.1, 0.3, 0.5]:
-        eval_obj.extra_metrics[f'mAP@{int(t*100)}'] = get_ap(eval_obj, t)
-        eval_obj.extra_metrics[f'mAR@{int(t*100)}'] = get_ar(eval_obj, t)
-        
-    eval_obj.extra_metrics['mAP@10:95'] = np.mean([get_ap(eval_obj, t) for t in full_thrs])
-    eval_obj.extra_metrics['mAP@50:95'] = np.mean([get_ap(eval_obj, t) for t in full_thrs if t >= 0.5])
-    eval_obj.extra_metrics['mAR@10:95'] = np.mean([get_ar(eval_obj, t) for t in full_thrs])
-    eval_obj.extra_metrics['mAR@50:95'] = np.mean([get_ar(eval_obj, t) for t in full_thrs if t >= 0.5])
+        idx = int(np.argmin(np.abs(full_thrs - t)))
+        eval_obj.extra_metrics[f'mAP@{int(t*100)}'] = ap_values[idx]
+        eval_obj.extra_metrics[f'mAR@{int(t*100)}'] = ar_values[idx]
+
+    high = [i for i, t in enumerate(full_thrs) if t >= 0.5]
+    eval_obj.extra_metrics['mAP@10:95'] = np.mean(ap_values)
+    eval_obj.extra_metrics['mAP@50:95'] = np.mean([ap_values[i] for i in high])
+    eval_obj.extra_metrics['mAR@10:95'] = np.mean(ar_values)
+    eval_obj.extra_metrics['mAR@50:95'] = np.mean([ar_values[i] for i in high])
 
     return eval_obj
 
@@ -266,21 +264,19 @@ def plot_coco_performance(coco_eval, test_name="default"):
     
     _, axes = plt.subplots(2, 1, figsize=(15, 10), sharey=True)
     
-    sns.barplot(x='Metric', y='Value', data=df_map, palette='magma', hue='Metric', legend=False, ax=axes[0])
-    axes[0].set_title(f'Precision (AP) - {test_name}', fontsize=14, fontweight='bold')
-    for i, v in enumerate(df_map['Value']):
-        axes[0].text(i, v + 0.01, f"{v:.3f}", ha='center', fontweight='bold')
-    axes[0].grid(axis='y', alpha=0.3)
-    axes[0].set_ylabel('Score')
-    axes[0].set_xlabel('')
-    
-    sns.barplot(x='Metric', y='Value', data=df_mar, palette='viridis', hue='Metric', legend=False, ax=axes[1])
-    axes[1].set_title(f'Recall (AR) - {test_name}', fontsize=14, fontweight='bold')
-    for i, v in enumerate(df_mar['Value']):
-        axes[1].text(i, v + 0.01, f"{v:.3f}", ha='center', fontweight='bold')
-    axes[1].grid(axis='y', alpha=0.3)
-    axes[1].set_ylabel('Score')
-    axes[1].set_xlabel('')
+    panels = (
+        (axes[0], df_map, 'magma', 'Precision (AP)'),
+        (axes[1], df_mar, 'viridis', 'Recall (AR)'),
+    )
+    for ax, data, palette, title in panels:
+        sns.barplot(x='Metric', y='Value', data=data, palette=palette,
+                    hue='Metric', legend=False, ax=ax)
+        ax.set_title(f'{title} - {test_name}', fontsize=14, fontweight='bold')
+        for i, v in enumerate(data['Value']):
+            ax.text(i, v + 0.01, f"{v:.3f}", ha='center', fontweight='bold')
+        ax.grid(axis='y', alpha=0.3)
+        ax.set_ylabel('Score')
+        ax.set_xlabel('')
     
     plt.tight_layout()
     plt.show()
@@ -396,6 +392,90 @@ def normalize_id(raw_id):
         return clean
 
 
+def _apply_images_to_remove(coco_gt, img_ids, images_to_remove=None, normalize=True, verbose=False):
+    """Return the image ids left after applying the annotation-based filters."""
+    mapper = normalize_id if normalize else (lambda x: x)
+    img_ids = {mapper(i) for i in img_ids} if normalize else list(img_ids)
+    if images_to_remove is not None:
+        for key, value in images_to_remove:
+            to_remove = {
+                mapper(ann['image_id'])
+                for ann in coco_gt.dataset.get('annotations', [])
+                if ann.get(key) == value
+            }
+            if normalize:
+                img_ids -= to_remove
+            else:
+                img_ids = [i for i in img_ids if i not in to_remove]
+            if verbose:
+                print(f"Removed {len(to_remove)} images based on the criteria {key}={value}")
+    return img_ids
+
+
+def _build_gt_by_img(coco_gt, tested_img_ids, normalize=True, by_class=False):
+    """Group non-crowd GT boxes by image, optionally also by class.
+
+    Returns ``(selected_ids, gt_by_img)`` or, with ``by_class=True``,
+    ``(selected_ids, gt_by_img, gt_by_img_and_class, gt_counts_by_class)``.
+    """
+    mapper = normalize_id if normalize else (lambda x: x)
+    selected = {mapper(i) for i in tested_img_ids}
+
+    gt_by_img = defaultdict(list)
+    gt_by_class = defaultdict(lambda: defaultdict(list))
+    gt_counts = defaultdict(int)
+    for ann in coco_gt.dataset.get('annotations', []):
+        img_id = mapper(ann.get('image_id'))
+        if img_id not in selected or ann.get('iscrowd', 0) != 0:
+            continue
+        if by_class:
+            cid = ann['category_id']
+            gt_by_class[cid][img_id].append(ann['bbox'])
+            gt_counts[cid] += 1
+        else:
+            gt_by_img[img_id].append(ann['bbox'])
+
+    if by_class:
+        return selected, gt_by_img, gt_by_class, gt_counts
+    return selected, gt_by_img
+
+
+def _predictions_by_img(preds, img_ids, conf_threshold=None, normalize=True):
+    """Group predictions by image, optionally dropping low-confidence ones."""
+    mapper = normalize_id if normalize else (lambda x: x)
+    preds_by_img = defaultdict(list)
+    for p in preds:
+        img_id = mapper(p.get("image_id"))
+        if img_id in img_ids and (conf_threshold is None or p.get("score", 0) >= conf_threshold):
+            preds_by_img[img_id].append(p)
+    return preds_by_img
+
+
+def _sorted_detections(preds_by_img, img_ids):
+    """Build the ``(img_id, bbox, score)`` list sorted by descending score."""
+    detections = []
+    for img_id in img_ids:
+        for p in preds_by_img.get(img_id, []):
+            detections.append((img_id, p["bbox"], p.get("score", 0)))
+    detections.sort(key=lambda x: x[2], reverse=True)
+    return detections
+
+
+def _style_axes(ax, grid_axis="x"):
+    """Apply the shared clean-plot style; ``grid_axis=None`` skips the grid."""
+    ax.set_axisbelow(True)
+    if grid_axis is not None:
+        ax.grid(axis=grid_axis, color="#e1e0d9", linewidth=0.8)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color("#c3c2b7")
+    ax.tick_params(colors="#52514e", length=0)
+
+
+def _conf_label(conf_threshold):
+    return f"{conf_threshold:.3f}" if conf_threshold is not None else "None"
+
+
 def ensemble_coco(json_paths, output_path, iou_thr=0.5, num_models=3):
     """Fuse predictions from multiple JSON result files into one ensemble result.
 
@@ -503,30 +583,10 @@ def plot_f1_confidence_curve(coco_gt, preds, tested_img_ids, iou_threshold=0.5, 
             - best_f1 (float): Maximum F1-score achieved (or F1 at given confidence).
             Returns (None, None) if no predictions or ground truths are found.
     """
-    preds = _load_predictions(preds)
-
-    tested_img_ids_norm = {normalize_id(i) for i in tested_img_ids}
-
-    gt_by_img = defaultdict(list)
-    total_gt = 0
-    for ann in coco_gt.dataset.get('annotations', []):
-        ann_img_id = normalize_id(ann.get('image_id'))
-        if ann_img_id in tested_img_ids_norm and ann.get('iscrowd', 0) == 0:
-            gt_by_img[ann_img_id].append(ann['bbox'])
-            total_gt += 1
-
-    preds_by_img = defaultdict(list)
-    for p in preds:
-        p_img_id = normalize_id(p.get("image_id"))
-        if p_img_id in tested_img_ids_norm:
-            preds_by_img[p_img_id].append(p)
-
-    detections = []
-    for img_id in tested_img_ids_norm:
-        for p in preds_by_img.get(img_id, []):
-            detections.append((img_id, p["bbox"], p.get("score", 0)))
-
-    detections.sort(key=lambda x: x[2], reverse=True)
+    tested_img_ids_norm, gt_by_img = _build_gt_by_img(coco_gt, tested_img_ids)
+    preds_by_img = _predictions_by_img(_load_predictions(preds), tested_img_ids_norm)
+    detections = _sorted_detections(preds_by_img, tested_img_ids_norm)
+    total_gt = sum(len(v) for v in gt_by_img.values())
 
     tp, fp, scores = match_predictions_to_gt(detections, gt_by_img, iou_threshold)
 
@@ -589,30 +649,10 @@ def plot_fppi_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.5, max_f
     Returns:
         None: Displays the plot.
     """
-    preds = _load_predictions(preds)
-
-    tested_img_ids_norm = {normalize_id(i) for i in tested_img_ids}
-
-    gt_by_img = defaultdict(list)
-    total_gt = 0
-    for ann in coco_gt.dataset.get('annotations', []):
-        ann_img_id = normalize_id(ann.get('image_id'))
-        if ann_img_id in tested_img_ids_norm and ann.get('iscrowd', 0) == 0:
-            gt_by_img[ann_img_id].append(ann['bbox'])
-            total_gt += 1
-
-    preds_by_img = defaultdict(list)
-    for p in preds:
-        p_img_id = normalize_id(p.get("image_id"))
-        if p_img_id in tested_img_ids_norm:
-            preds_by_img[p_img_id].append(p)
-
-    detections = []
-    for img_id in tested_img_ids_norm:
-        for p in preds_by_img.get(img_id, []):
-            detections.append((img_id, p["bbox"], p.get("score", 0)))
-            
-    detections.sort(key=lambda x: x[2], reverse=True)
+    tested_img_ids_norm, gt_by_img = _build_gt_by_img(coco_gt, tested_img_ids)
+    preds_by_img = _predictions_by_img(_load_predictions(preds), tested_img_ids_norm)
+    detections = _sorted_detections(preds_by_img, tested_img_ids_norm)
+    total_gt = sum(len(v) for v in gt_by_img.values())
 
     tp, fp, scores = match_predictions_to_gt(detections, gt_by_img, iou_threshold)
 
@@ -673,37 +713,16 @@ def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
               (ground truth count), TPs (true positives) and Recall. The same
               table is also printed to stdout.
     """
-    preds = _load_predictions(preds)
-
-    tested_img_ids_norm = {normalize_id(i) for i in tested_img_ids}
-
-    if images_to_remove is not None:
-        for key, value in images_to_remove:
-            img_ids_to_remove = {
-                normalize_id(ann['image_id'])
-                for ann in coco_gt.dataset.get('annotations', [])
-                if ann.get(key) == value
-            }
-            tested_img_ids_norm -= img_ids_to_remove
-            print(f"Removed {len(img_ids_to_remove)} images based on the criteria {key}={value}")
-
-    gt_by_img_and_class = defaultdict(lambda: defaultdict(list))
-    gt_counts_by_class = defaultdict(int)
-
-    for ann in coco_gt.dataset.get('annotations', []):
-        ann_img_id = normalize_id(ann.get('image_id'))
-        if ann_img_id in tested_img_ids_norm and ann.get('iscrowd', 0) == 0:
-            cid = ann['category_id']
-            gt_by_img_and_class[cid][ann_img_id].append(ann['bbox'])
-            gt_counts_by_class[cid] += 1
-
-    preds_by_img = defaultdict(list)
-    
-    for p in preds:
-        p_img_id = normalize_id(p.get("image_id"))
-        if p_img_id in tested_img_ids_norm:
-            if conf_threshold is None or p.get("score", 0) >= conf_threshold:
-                preds_by_img[p_img_id].append(p)
+    tested_img_ids_norm = _apply_images_to_remove(
+        coco_gt, tested_img_ids, images_to_remove, verbose=True,
+    )
+    tested_img_ids_norm, _, gt_by_img_and_class, gt_counts_by_class = _build_gt_by_img(
+        coco_gt, tested_img_ids_norm, by_class=True,
+    )
+    preds_by_img = _predictions_by_img(
+        _load_predictions(preds), tested_img_ids_norm, conf_threshold,
+    )
+    detections = _sorted_detections(preds_by_img, tested_img_ids_norm)
 
     results = []
 
@@ -712,18 +731,9 @@ def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
         if total_gt == 0:
             continue
 
-        gt_by_img = gt_by_img_and_class[cid]
-        
-        detections = []
-        for img_id in tested_img_ids_norm:
-            img_preds = preds_by_img.get(img_id, [])
-            img_preds = sorted(img_preds, key=lambda x: x.get("score", 0), reverse=True)
-            for p in img_preds:
-                detections.append((img_id, p["bbox"], p.get("score", 0)))
-
-        detections.sort(key=lambda x: x[2], reverse=True)
-        
-        tp, _, _ = match_predictions_to_gt(detections, gt_by_img, iou_threshold)
+        tp, _, _ = match_predictions_to_gt(
+            detections, gt_by_img_and_class[cid], iou_threshold,
+        )
 
         total_hits = np.sum(tp) if len(tp) > 0 else 0
         recall = total_hits / total_gt
@@ -736,7 +746,7 @@ def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
         })
 
     df = pd.DataFrame(results).sort_values("GTs", ascending=False)
-    print(f"\nClass-Aware recall report (Conf Threshold: {f'{conf_threshold:.3f}' if conf_threshold is not None else 'None'})")
+    print(f"\nClass-Aware recall report (Conf Threshold: {_conf_label(conf_threshold)})")
     print(df.to_string(index=False))
 
     if show_plot:
@@ -758,12 +768,7 @@ def class_aware_recall_report(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
         else:
             title += ", conf=None"
         ax.set_title(title + ")")
-        ax.set_axisbelow(True)
-        ax.grid(axis="x", color="#e1e0d9", linewidth=0.8)
-        for side in ("top", "right", "left"):
-            ax.spines[side].set_visible(False)
-        ax.spines["bottom"].set_color("#c3c2b7")
-        ax.tick_params(colors="#52514e", length=0)
+        _style_axes(ax)
         fig.tight_layout()
         plt.show()
 
@@ -818,14 +823,7 @@ def plot_class_area_vs_recall(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
         conf_threshold=conf_threshold, images_to_remove=images_to_remove,
     )
 
-    img_ids_norm = {normalize_id(i) for i in tested_img_ids}
-    if images_to_remove is not None:
-        for key, value in images_to_remove:
-            img_ids_norm -= {
-                normalize_id(ann['image_id'])
-                for ann in coco_gt.dataset.get('annotations', [])
-                if ann.get(key) == value
-            }
+    img_ids_norm = _apply_images_to_remove(coco_gt, tested_img_ids, images_to_remove)
 
     images = {normalize_id(img['id']): img for img in coco_gt.dataset.get('images', [])}
     areas_by_name = defaultdict(list)
@@ -1036,7 +1034,8 @@ def visualize_json_results(coco_gt, preds, images_dir, conf_threshold=None, imag
         # draw.text((x, y - 10), f"{score:.2f}", fill="red")
 
     individual_insects = []
-    
+    image_array = np.array(image)
+
     for p in img_preds:
         segm = p.get('segmentation')
         if conf_threshold is not None and p.get('score', 0) < conf_threshold:
@@ -1057,7 +1056,7 @@ def visualize_json_results(coco_gt, preds, images_dir, conf_threshold=None, imag
                 # Compressed RLE (SAM3 output)
                 mask = mask_util.decode(segm)
 
-            masked_insect = np.array(image) * np.expand_dims(mask, axis=2)
+            masked_insect = image_array * np.expand_dims(mask, axis=2)
             
             x, y, w, h = map(int, p['bbox'])
             padding = 20
@@ -1109,53 +1108,20 @@ def visualize_json_results(coco_gt, preds, images_dir, conf_threshold=None, imag
 
 
 def _class_matching_curves(coco_gt, preds, tested_img_ids, iou_threshold=0.1, images_to_remove: list = None):
-    """Match predictions to ground truth once per class and return scoring curves.
+    """Match predictions per class, keeping each detection's match outcome.
 
-    This mirrors the image and annotation filtering of
-    :func:`class_aware_recall_report`, but keeps the per-detection match outcome
-    instead of only the aggregate counts. The detections are sorted by score,
-    and because filtering to ``score >= thr`` keeps a prefix of that ordering,
-    the greedy matching of the surviving detections is unchanged. The TP count
-    at any threshold is therefore the sum of ``is_tp`` over that prefix.
-
-    Returns a dict with the filtered image ids, per-class GT counts, the
-    per-class GT boxes grouped by image, and a ``curves`` entry per class with
+    Mirrors the filtering of :func:`class_aware_recall_report`. Detections are
+    score-sorted, so filtering to ``score >= thr`` keeps a prefix and the
+    greedy matches of the survivors are unchanged. Returns the selected ids,
+    GT counts, GT boxes by image and class, and per-class ``curves`` with
     aligned ``image_ids``, ``scores`` and ``is_tp`` arrays.
     """
-    preds = _load_predictions(preds)
-
-    tested_img_ids_norm = {normalize_id(i) for i in tested_img_ids}
-
-    if images_to_remove is not None:
-        for key, value in images_to_remove:
-            img_ids_to_remove = {
-                normalize_id(ann['image_id'])
-                for ann in coco_gt.dataset.get('annotations', [])
-                if ann.get(key) == value
-            }
-            tested_img_ids_norm -= img_ids_to_remove
-
-    gt_by_img_and_class = defaultdict(lambda: defaultdict(list))
-    gt_counts_by_class = defaultdict(int)
-
-    for ann in coco_gt.dataset.get('annotations', []):
-        ann_img_id = normalize_id(ann.get('image_id'))
-        if ann_img_id in tested_img_ids_norm and ann.get('iscrowd', 0) == 0:
-            cid = ann['category_id']
-            gt_by_img_and_class[cid][ann_img_id].append(ann['bbox'])
-            gt_counts_by_class[cid] += 1
-
-    preds_by_img = defaultdict(list)
-    for p in preds:
-        p_img_id = normalize_id(p.get("image_id"))
-        if p_img_id in tested_img_ids_norm:
-            preds_by_img[p_img_id].append(p)
-
-    detections = []
-    for img_id in tested_img_ids_norm:
-        for p in preds_by_img.get(img_id, []):
-            detections.append((img_id, p["bbox"], p.get("score", 0)))
-    detections.sort(key=lambda x: x[2], reverse=True)
+    tested_img_ids_norm = _apply_images_to_remove(coco_gt, tested_img_ids, images_to_remove)
+    tested_img_ids_norm, _, gt_by_img_and_class, gt_counts_by_class = _build_gt_by_img(
+        coco_gt, tested_img_ids_norm, by_class=True,
+    )
+    preds_by_img = _predictions_by_img(_load_predictions(preds), tested_img_ids_norm)
+    detections = _sorted_detections(preds_by_img, tested_img_ids_norm)
 
     det_image_ids = np.array([d[0] for d in detections], dtype=object)
     det_scores = np.array([float(d[2]) for d in detections], dtype=float)
@@ -1279,50 +1245,35 @@ def community_composition_report(coco_gt, preds, tested_img_ids, iou_threshold=0
                                  show_plot=False, n_bootstrap=1000, random_state=0):
     """Compare the real and AI-perceived taxon communities.
 
-    Ground truth abundance is ``N_GT,c``, the number of annotations of taxon
-    ``c``. The detected abundance is ``TP_c``, the number of class-aware true
-    positives. False positives are excluded because they cannot be assigned a
-    taxon. Relative abundances are:
+    GT abundance is ``N_GT,c``; detected abundance is ``TP_c`` (class-aware
+    true positives; false positives carry no taxon and are excluded):
 
         P_GT(c) = N_GT,c / sum_k N_GT,k
         P_AI(c) = TP_c / sum_k TP_k
-
-    If recall were the same for every taxon, ``P_AI`` would equal ``P_GT``.
-    Class-dependent recall distorts it.
-
-    Metrics:
-
         BC = sum_c |P_GT(c) - P_AI(c)| / sum_c (P_GT(c) + P_AI(c))
         H' = -sum_{p>0} p ln p
         J' = H' / ln(S)
 
-    ``BC`` is computed on relative abundances, so it isolates compositional
-    distortion from the overall detection shortfall. ``S`` is the number of
-    taxa with a non-zero count, which is reported separately for GT and AI
-    because a taxon with zero TP drops out of the AI community. ``J'`` is NaN
-    when ``S < 2``.
+    ``BC`` uses relative abundances, so it isolates compositional distortion
+    from the overall detection shortfall. ``S`` is the number of taxa with a
+    non-zero count, reported separately for GT and AI because a taxon with
+    zero TP drops out of the AI community. ``J'`` is NaN when ``S < 2``.
 
     Args:
-        coco_gt (COCO): COCO dataset object containing ground truth annotations and category information.
-        preds (str, dict, or list): Predictions data, in any form accepted by
-            class_aware_recall_report.
-        tested_img_ids (list or set): Collection of image IDs to evaluate.
-        iou_threshold (float, optional): Intersection over Union threshold for matching predictions to ground truth.
-            Defaults to 0.1.
-        conf_threshold (float, optional): Operating-point confidence threshold. Defaults to None (all detections).
-        images_to_remove (list, optional): List of (key, value) tuples. Every image containing a
-            matching annotation is excluded. Defaults to None.
-        show_plot (bool, optional): If True, draw paired horizontal bars of P_GT and P_AI. Defaults to False.
-        n_bootstrap (int, optional): Number of paired image-bootstrap replicates for
-            percentile confidence intervals. Set to 0 to skip. Defaults to 1000.
-        random_state (int, optional): Seed for the bootstrap. Defaults to 0.
+        coco_gt (COCO): COCO ground truth with per-taxon categories.
+        preds (str, dict, or list): Predictions, in any form accepted by class_aware_recall_report.
+        tested_img_ids (list or set): Image IDs to evaluate.
+        iou_threshold (float, optional): IoU threshold for matching. Defaults to 0.1.
+        conf_threshold (float, optional): Operating point. Defaults to None (all detections).
+        images_to_remove (list, optional): (key, value) annotation filters. Defaults to None.
+        show_plot (bool, optional): Draw paired bars of P_GT and P_AI. Defaults to False.
+        n_bootstrap (int, optional): Paired image-bootstrap replicates for CIs; 0 skips. Defaults to 1000.
+        random_state (int, optional): Bootstrap seed. Defaults to 0.
 
     Returns:
-        pd.DataFrame: Per-class table with columns Class, GTs, TPs, Recall,
-            P_GT and P_AI, sorted by GTs descending. ``attrs`` contains
-            'bray_curtis', 'shannon_gt', 'shannon_ai', 'shannon_diff',
-            'pielou_gt', 'pielou_ai', 'pielou_diff', 'richness_gt',
-            'richness_ai' and, when bootstrap runs, the matching '_ci' pairs.
+        pd.DataFrame: Columns Class, GTs, TPs, Recall, P_GT and P_AI, sorted by
+            GTs descending. ``attrs`` holds the metrics and, when bootstrap
+            runs, the matching '_ci' pairs.
     """
     ctx = _class_matching_curves(
         coco_gt, preds, tested_img_ids,
@@ -1350,22 +1301,17 @@ def community_composition_report(coco_gt, preds, tested_img_ids, iou_threshold=0
     metrics = _community_metrics(n_gt, tp)
     total_tp = metrics['tp_total']
 
-    if total_tp > 0:
-        df["P_GT"] = n_gt / metrics['gt_total']
-        df["P_AI"] = tp / total_tp
-    else:
-        df["P_GT"] = n_gt / metrics['gt_total'] if metrics['gt_total'] > 0 else np.nan
-        df["P_AI"] = np.nan
+    df["P_GT"] = n_gt / metrics['gt_total'] if metrics['gt_total'] > 0 else np.nan
+    df["P_AI"] = tp / total_tp if total_tp > 0 else np.nan
 
     if total_tp == 0:
         print("Warning: no true positives at this operating point; AI metrics are undefined.")
 
-    for key, value in metrics.items():
-        df.attrs[key] = value
+    df.attrs.update(metrics)
     df.attrs['conf_threshold'] = conf_threshold
     df.attrs['iou_threshold'] = iou_threshold
 
-    if n_bootstrap and n_bootstrap > 0 and total_tp > 0:
+    if n_bootstrap and total_tp > 0:
         n_gt_mat, tp_mat = _community_count_matrices(ctx, class_ids, conf_threshold)
         rng = np.random.default_rng(random_state)
         n_images = n_gt_mat.shape[0]
@@ -1375,9 +1321,9 @@ def community_composition_report(coco_gt, preds, tested_img_ids, iou_threshold=0
         for _ in range(n_bootstrap):
             idx = rng.integers(0, n_images, n_images)
             rep = _community_metrics(n_gt_mat[idx].sum(axis=0), tp_mat[idx].sum(axis=0))
-            if not np.isfinite(rep['bray_curtis']):
-                continue
-            if not np.isfinite(rep['pielou_gt']) or not np.isfinite(rep['pielou_ai']):
+            if not (np.isfinite(rep['bray_curtis'])
+                    and np.isfinite(rep['pielou_gt'])
+                    and np.isfinite(rep['pielou_ai'])):
                 continue
             for key in rep_keys:
                 replicates[key].append(rep[key])
@@ -1393,7 +1339,7 @@ def community_composition_report(coco_gt, preds, tested_img_ids, iou_threshold=0
         df.attrs['n_bootstrap_effective'] = len(replicates['bray_curtis'])
 
     print(f"\nCommunity composition report (IoU={iou_threshold}, "
-          f"conf={f'{conf_threshold:.3f}' if conf_threshold is not None else 'None'})")
+          f"conf={_conf_label(conf_threshold)})")
     print(df.round(3).to_string(index=False))
 
     bc_ci = df.attrs.get('bray_curtis_ci')
@@ -1436,21 +1382,16 @@ def community_composition_report(coco_gt, preds, tested_img_ids, iou_threshold=0
         ax.set_xlabel("Relative abundance (%)")
         ax.set_ylabel("Class")
         ax.set_title(f"Community composition (IoU={iou_threshold}, "
-                     f"conf={f'{conf_threshold:.3f}' if conf_threshold is not None else 'None'})\n"
+                     f"conf={_conf_label(conf_threshold)})\n"
                      f"BC={_format_ci(metrics['bray_curtis'], bc_ci)}",
                      fontsize=11)
         ax.legend(frameon=False, loc="lower right", fontsize=9)
-        ax.set_axisbelow(True)
-        ax.grid(axis="x", color="#e1e0d9", linewidth=0.8)
-        for side in ("top", "right", "left"):
-            ax.spines[side].set_visible(False)
-        ax.spines["bottom"].set_color("#c3c2b7")
-        ax.tick_params(colors="#52514e", length=0)
+        _style_axes(ax)
         fig.text(
             0.5, 0.02,
-            f"H': GT {metrics['shannon_gt']:.3f} vs AI {metrics['shannon_ai']:.3f} | "
-            f"J': GT {metrics['pielou_gt']:.3f} vs AI {metrics['pielou_ai']:.3f} | "
-            f"S: GT {metrics['richness_gt']} vs AI {metrics['richness_ai']}",
+            f"Shannon H': delta {_format_ci(metrics['shannon_diff'], h_diff_ci)} | "
+            f"Pielou J': delta {_format_ci(metrics['pielou_diff'], j_diff_ci)} | "
+            f"Richness S: GT {metrics['richness_gt']} vs AI {metrics['richness_ai']}",
             ha='center', fontsize=9, color='#52514e',
         )
         fig.tight_layout(rect=(0, 0.04, 1, 1))
@@ -1461,29 +1402,21 @@ def community_composition_report(coco_gt, preds, tested_img_ids, iou_threshold=0
 
 def plot_community_metrics_vs_confidence(coco_gt, preds, tested_img_ids, iou_threshold=0.1,
                                          conf_thresholds=None, images_to_remove: list = None):
-    """Plot community metrics as a function of the operating confidence threshold.
+    """Plot community metrics as a function of the confidence threshold.
 
-    The matching is computed once per class over all predictions. Because the
-    greedy match processes detections by descending score, the TP count at
-    ``score >= thr`` is the cumulative TP count over that score-sorted prefix,
-    so the whole sweep needs a single matching pass.
+    One matching pass per class covers every threshold: detections are
+    score-sorted and the greedy matches of a prefix are unchanged.
 
     Args:
-        coco_gt (COCO): COCO dataset object containing ground truth annotations and category information.
-        preds (str, dict, or list): Predictions data, in any form accepted by
-            class_aware_recall_report.
-        tested_img_ids (list or set): Collection of image IDs to evaluate.
-        iou_threshold (float, optional): Intersection over Union threshold for matching predictions to ground truth.
-            Defaults to 0.1.
-        conf_thresholds (array-like, optional): Confidence values to sweep.
-            Defaults to 0.05, 0.10, ..., 0.95.
-        images_to_remove (list, optional): List of (key, value) tuples. Every image containing a
-            matching annotation is excluded. Defaults to None.
+        coco_gt (COCO): COCO ground truth with per-taxon categories.
+        preds (str, dict, or list): Predictions, in any form accepted by class_aware_recall_report.
+        tested_img_ids (list or set): Image IDs to evaluate.
+        iou_threshold (float, optional): IoU threshold for matching. Defaults to 0.1.
+        conf_thresholds (array-like, optional): Thresholds to sweep. Defaults to 0.05..0.95 step 0.05.
+        images_to_remove (list, optional): (key, value) annotation filters. Defaults to None.
 
     Returns:
-        pd.DataFrame: One row per threshold with columns bray_curtis,
-            shannon_gt, shannon_ai, shannon_diff, pielou_gt, pielou_ai,
-            pielou_diff, richness_gt, richness_ai, gt_total and tp_total.
+        pd.DataFrame: One row per threshold with the community metric columns.
     """
     if conf_thresholds is None:
         conf_thresholds = np.round(np.arange(0.05, 1.0, 0.05), 2)
@@ -1523,7 +1456,6 @@ def plot_community_metrics_vs_confidence(coco_gt, preds, tested_img_ids, iou_thr
     ax_div.set_title("Shannon H' and Pielou J'", fontsize=11)
     ax_div.set_xlim(0, 1)
     ax_div.legend(frameon=False, fontsize=8)
-    ax_div.grid(axis='y', color='#e1e0d9', linewidth=0.8)
 
     ax_bc.plot(x, sweep_df['bray_curtis'], color='#2a78d6', linewidth=2,
                label='Bray-Curtis')
@@ -1542,14 +1474,10 @@ def plot_community_metrics_vs_confidence(coco_gt, preds, tested_img_ids, iou_thr
     lines = ax_bc.get_lines() + ax_rich.get_lines()
     ax_bc.legend(lines, [line.get_label() for line in lines],
                  frameon=False, fontsize=8, loc='lower left')
-    ax_bc.grid(axis='y', color='#e1e0d9', linewidth=0.8)
 
-    for ax in (ax_div, ax_bc, ax_rich):
-        ax.set_axisbelow(True)
-        for side in ('top', 'right', 'left'):
-            ax.spines[side].set_visible(False)
-        ax.spines['bottom'].set_color('#c3c2b7')
-        ax.tick_params(colors='#52514e', length=0)
+    _style_axes(ax_div, "y")
+    _style_axes(ax_bc, "y")
+    _style_axes(ax_rich, None)
 
     fig.suptitle(f"Community metrics vs confidence (IoU={iou_threshold})")
     fig.tight_layout(rect=(0, 0, 1, 0.96))
