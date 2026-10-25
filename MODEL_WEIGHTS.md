@@ -79,8 +79,8 @@ wget -O models-cache/flat_bug_M.pt \
 ### InsectsDCT (GitHub, ships as `best.pt`)
 
 ```bash
-wget -O models-cache/insectsDCT_insects6ColorExtend.pt \
-  https://raw.githubusercontent.com/kimbjerge/insectDCT/main/runs/detect/insects6ColorExtend/weights/best.pt
+wget -O models-cache/insectsDCT_insects8Color.pt \
+  https://raw.githubusercontent.com/kimbjerge/insectDCT/main/runs/detect/insects8Color/weights/best.pt
 ```
 
 ### Arthropod (HF Hub)
@@ -100,6 +100,10 @@ wget -O models-cache/yolo11l_ArthroNat+flatbug.pt \
 wget -O models-cache/yolo11l_ArthroNat_mosaic33.pt \
   https://huggingface.co/edgaremy/arthropod-detector/resolve/main/yolo11l_ArthroNat_mosaic33.pt
 ```
+
+### AutoPollS
+
+Download the model weights for the AutoPollS detector (YOLOv11l) from the Google Drive link provided in the AutoPollS GitHub repository [here](https://github.com/Crall-Lab/AutoPollSAnalysis). The model can be downloaded from [here](https://drive.google.com/file/d/1xsLxBCJhnFi8wejTF1V851t4TskNgAqn/view). From this ZIP folder, the file `AutoPollSAnalysis_models_tmp/AutoPollSAnalysis_models_tmp/AutoPollS_YOLOv11l_800_V0/weights/best.pt` should be renamed to `AutoPollS_YOLOv11l_800_V0.pt` and placed in the `models-cache/` directory.
 
 ## Binary classifier weights
 
