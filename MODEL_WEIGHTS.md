@@ -80,7 +80,7 @@ wget -O models-cache/flat_bug_M.pt \
 
 ```bash
 wget -O models-cache/insectsDCT_insects8Color.pt \
-  https://raw.githubusercontent.com/kimbjerge/insectDCT/main/runs/detect/insects8Color/weights/best.pt
+  https://github.com/kimbjerge/insectDCT/blob/main/runs/detect/insects8Color/weights/best.pt
 ```
 
 ### Arthropod (HF Hub)
